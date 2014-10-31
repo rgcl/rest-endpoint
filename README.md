@@ -19,7 +19,7 @@ var store = {
     remove : function (id, ctx) { }
 };
 
-app.use('/animals/id?', rest(store));
+app.use('/animals/:id?', rest(store));
 
 ```
 
@@ -37,10 +37,29 @@ DELETE / animals/34          -> store.remove(34, ctx)
 
 ## API
 
+### Core
+
 ```javascript
 var rest = require('rest-endpoint')
 ```
-is a middleware that recive a ```store``` object.
+In this case, ```rest``` is a function that recive a ```store``` object
+and return a ExpressJS/connect compilant end middleware.
+
+The returned middleware MUST be used in the ```app.use``` or in the ```router.use```
+in this way:
+
+```javascript
+app.use('/v0/books/:id?', rest(store))
+
+or
+
+var route = express.Route()
+route.use('/books/:id?', rest(store))
+app.use('/v0', route);
+```
+
+Note that ```:id?``` is required because some REST FULL methods, like GET need the id of
+the resource.
 
 ### store
 
