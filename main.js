@@ -115,8 +115,8 @@ module.exports = function (store) {
                         store.query(query, ctx),
                         function (items) {
                             if (ctx.total) {
-                                var range2 = result.total > range[2] ?
-                                    range[2] : result.total;
+                                var range2 = ctx.total > range[2] ?
+                                    range[2] : ctx.total;
                                 res.set(
                                     'Content-Range',
                                     'items '
@@ -124,9 +124,9 @@ module.exports = function (store) {
                                         + '-'
                                         + range2
                                         + '/'
-                                        + result.totalCount
+                                        + ctx.total
                                 );
-                                res.set('X-Total-Count', result.totalCount);
+                                res.set('X-Total-Count', ctx.total);
                             }
                             distpatch(req, res)(items)
                         },
