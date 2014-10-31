@@ -103,7 +103,7 @@ store.add = function (item, ctx) {
     return item;
 }
 ```
-***DBH-PG***
+***[DBH-PG](https://github.com/sapienlab/dbh-pg)***
 ```javascript
 var DBH = require('dbh-pg'),
     db = new DBH('postgres://postgres@localhost/mydb'),
@@ -143,7 +143,7 @@ store.put = function (id, item, ctx) {
     return item;
 }
 ```
-***DBH-PG***
+***[DBH-PG](https://github.com/sapienlab/dbh-pg)***
 ```javascript
 var DBH = require('dbh-pg'),
     db = new DBH('postgres://postgres@localhost/mydb'),
