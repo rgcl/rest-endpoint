@@ -68,17 +68,17 @@ app.use('/v0', route);
 Note that ```:id?``` is required because some RESTful methods, like GET need the id of
 item to work.
 
-### store
+### Store
 
-A store (called also **resource**) is a simple object that abstracts a collection of items. It's agnostic about
+A store (called also *resource*) is a simple object that abstracts a collection of items. It's agnostic about
 where the data reside (PostgreSQL, MongoDB, etc).
 
-Each method receive a ```ctx``` (**context**) as first parameter,
+Each method receive a ```ctx``` (*context*) as first parameter,
 that is an object that have at least these attributes:
 * ```req``` : The ```request``` from ExpressJS/Connect
 * ```res``` : The ```response``` from ExpressJS/Connect
 * ```params``` : Shorthand for ```req.params```. So if the target is ```/:user_id/photos/:id?```
-                 you have ```{ user_id: <the_given_user_id>, id: <the_given_id> }```
+                 you have ```{ user_id: {user_id}, id: {id} }```
 Some methods have additional parameters that are documented in those methods.
 
 Each store methods returns a simple object (except ```store.has``` that returns a boolean) or a
@@ -86,29 +86,118 @@ Each store methods returns a simple object (except ```store.has``` that returns 
 
 ### Mapping
 
-#### GET /<resource>/<id>
-Mapped to ```store.get(ctx, <id>)```
+#### GET /{resource}/
+Mapped to ```store.all(ctx, filters)```
 
-store.get must return the item object or null (or undefined) if the item not exists.
+store.all must return an array of items. If no items then empty array.
+
+**Note:** [Pagination](#Pagination), [Filtering](#Filtering), [Sorting](#Sorting),
+[Fields Selection](#Fields_Selection) and [Total-Count](#Total-Count) apply to this
+method (store.all) buts are omited here for simplicity.
 
 ***Examples***
 
-HTTP Request
+HTTP Request:
+```
+GET /animals/
+Accept: text/json
+```
+
+```store.all``` implemented in memory:
+```javascript
+var data = [{name: 'cat', id: 0}, {name: 'dog', id: 1}];
+
+store.all = function (ctx, filters) {
+    return data;
+}
+```
+
+```store.all``` implemented with [DBH-PG][]:
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        return conn
+            .fetchAll('select * from animals')
+    })
+}
+```
+
+HTTP Response:
+```
+200 OK
+Content-Type: application/json
+
+[{ "id" : 0, "name" : "cat" }, { "id" : 1, "name" : "dog" }]
+```
+
+HTTP Response without data:
+```
+200 OK
+Content-Type: application/json
+
+[]
+```
+
+#### GET /{resource}/{id}
+Mapped to ```store.get(ctx, {id})```
+
+store.get must return the item object or null (or undefined) if the item not exists.
+
+**Note:** [Fields Selection](#Fields_Selection) apply to this
+method (store.all) buts is omited here for simplicity.
+
+***Examples***
+
+HTTP Request:
 ```
 GET /animals/1
 Accept: text/json
 ```
 
-store.get implemented in memory
+```store.get``` implemented in memory:
 ```javascript
 var data = [{name: 'cat', id: 0}, {name: 'dog', id: 1}];
 
-store.has = function (id, item, ctx) {
+store.get = function (ctx, id) {
     return data[id];
 }
 ```
 
-store.get implemented with [DBH-PG][1]
+```store.get``` implemented with [DBH-PG][]:
+```javascript
+store.get = function (ctx, id) {
+    return using(db.conn(), function (conn) {
+        return conn
+            .fetchOne('select * from animals where id=$1', [id])
+    })
+}
+```
+
+HTTP Response:
+```
+200 OK
+Content-Type: application/json
+
+{ "id" : 1, "name" : "dog" }
+```
+
+HTTP Response without data:
+```
+404 Not Found
+Content-Type: application/json
+
+{ "code" : 404, "message": "Not Found" }
+```
+
+
+
+
+
+
+
+
+
+
 
 #### store.get(id, ctx)
 ***Summary:***
@@ -132,14 +221,7 @@ The item object or null (or undefined) if the item does not exists.
 ***memory***
 
 ***[DBH-PG](https://github.com/sapienlab/dbh-pg)***
-```javascript
-store.put = function (id, item, ctx) {
-    return using(db.conn(), function (conn) {
-        return conn
-            .fetchOne('select * from animals where id=$1', [id])
-    })
-}
-```
+
 
 #### store.add(item, ctx) -> item
 ***Summary:***
@@ -213,7 +295,7 @@ store.put = function (id, item, ctx) {
     return item;
 }
 ```
-***[DBH-PG](https://github.com/sapienlab/dbh-pg)***
+***[DBH-PG][]***
 ```javascript
 store.put = function (id, item, ctx) {
     return using(db.conn(), function (conn) {
