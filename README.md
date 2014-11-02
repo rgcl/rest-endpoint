@@ -420,16 +420,76 @@ HTTP Response if not exists:
 404 Not Found
 Content-Type: application/json
 ```
+###Miscellaneous
 
-###Pagination
+####Pagination
+Pagination appy to ```store.all```.
 
-###Filtering
+Typically you do not want to return all items, but only a range for performance reasons.
 
-###Sorting
+For this ```page``` and ```per_page``` params in the ```query string``` (if any)
+are passing to the ```ctx``` var.
 
-###Fields Selection
+By default page and per_page are setting to 1 and 25 respectively.
+You can override this in ```store.defaultPage``` and ```store.defaultPerPage```.
 
-###Total-Count
+Furthermore, ```ctx.limit``` automatically is setter to ```ctx.per_page```, and
+```ctx.offset``` to ```(ctx.page - 1) * ctx.per_page```.
+
+***Examples***
+
+HTTP Request:
+```
+GET /animals/?page=3
+Accept: application/json
+```
+
+```store.all``` implementing with memory
+```javascript
+var data = [ 
+    { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
+    { id: 1, name: 'Steve', sex: 'm', type: 'dog' }
+]
+
+store.all = function (ctx, filters) {
+    return data.slice(ctx.offset, ctx.limit)
+}
+```
+
+```store.all``` implementing with [DBH-PG][]
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        conn.fetchAll('select * from animals ' + DBH.sqlLimit(ctx), ctx);
+    })
+}
+```
+
+HTTP Response:
+```
+200 Ok
+Content-Type: application/json
+Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25>; rel="prev",
+  <{host+base_path}animals?page=4&per_page=25>; rel="next"
+
+[]
+```
+Notes:
+* You can set ```store.useLinkHeaders = false``` to not
+use [Link Headers](http://tools.ietf.org/html/rfc5988).
+* ```{host+base_path}``` is calculated from the request, example
+```https://api.example.com/v1/```.
+* ```rel="first"``` ever is ```?page=1```
+
+
+####Filtering
+
+####Sorting
+
+####Fields Selection
+
+####Total-Count
 
 ## LICENSE
 
