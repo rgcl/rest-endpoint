@@ -91,8 +91,8 @@ Mapped to ```store.all(ctx, filters)```
 
 store.all must return an array of items. If no items then empty array.
 
-**Note:** [Pagination](#Pagination), [Filtering](#Filtering), [Sorting](#Sorting),
-[Fields Selection](#Fields_Selection) and [Total-Count](#Total-Count) apply to this
+**Note:** [Pagination](#pagination), [Filtering](#filtering), [Sorting](#sorting),
+[Fields Selection](#fields-selection) and [Counting](#counting) apply to this
 method (store.all) buts are omited here for simplicity.
 
 ***Examples***
@@ -444,7 +444,7 @@ GET /animals/?page=3
 Accept: application/json
 ```
 
-```store.all``` implementing with memory
+```store.all``` implementing with memory:
 ```javascript
 var data = [ 
     { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
@@ -456,11 +456,11 @@ store.all = function (ctx, filters) {
 }
 ```
 
-```store.all``` implementing with [DBH-PG][]
+```store.all``` implementing with [DBH-PG][]:
 ```javascript
 store.all = function (ctx, filters) {
     return using(db.conn(), function (conn) {
-        conn.fetchAll('select * from animals ' + DBH.sqlLimit(ctx), ctx);
+        conn.fetchAll('select * from animals ' + DBH.sqlLimit(ctx));
     })
 }
 ```
@@ -476,20 +476,346 @@ Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
 []
 ```
 Notes:
-* You can set ```store.useLinkHeaders = false``` to not
-use [Link Headers](http://tools.ietf.org/html/rfc5988).
-* ```{host+base_path}``` is calculated from the request, example
-```https://api.example.com/v1/```.
+* You can set ```store.useLinkHeaders = false``` to not use [Link Headers](http://tools.ietf.org/html/rfc5988).
+* ```{host+base_path}``` is calculated from the request, example ```https://api.example.com/v1/```.
 * ```rel="first"``` ever is ```?page=1```
 
-
 ####Filtering
+Filtering apply to ```store.all```.
+
+store.all recive ```filters``` as parameter. This is just the ```query string``` as object without
+these reserved words: ```page```, ```per_page```, ```sort```, ```embed``` and ```fields```.
+
+You can use the filters as far you need to filter the return data.
+
+***Examples***
+
+HTTP Request:
+```
+GET /animals/?page=1&type=cat
+Accept: application/json
+```
+
+```store.all``` implementing with memory
+```javascript
+var data = [ 
+    { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
+    { id: 1, name: 'Steve', sex: 'm', type: 'dog' }
+]
+
+store.all = function (ctx, filters) {
+    // here we accept only 'type' filter
+    if (filters.type) {
+        data = data.filter(function (item) {
+            item.type === filters.type
+        })
+    }
+    // this is for pagination
+    return data.slice(ctx.offset, ctx.limit)
+}
+```
+
+```store.all``` implementing with [DBH-PG][]
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        // here we accept 'type' and 'sex' filters
+        var sql = 'select * from animals where true '
+        if (filters.type) {
+            sql += 'and type=$type '
+        }
+        if (filters.sex) {
+            sql += 'and sex=$sex '
+        }
+        // this is for pagination
+        sql += DBH.sqlLimit(ctx)
+        conn.fetchAll(sql, filters);
+    })
+}
+```
+
+HTTP Response:
+```
+200 Ok
+Content-Type: application/json
+Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25>; rel="next"
+
+[
+    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" }
+]
+```
 
 ####Sorting
+Sorting apply to ```store.all```.
+
+You can offer sorting capabilities to the store.
+
+For this ```sort``` parameter in the ```query string``` (if any) is passing to the ```ctx``` var.
+
+sort must be compilant with this grammar:
+```bnf
+sort      ::= <attr-rule> | <attr-rule> "," <sort>
+attr-rule ::= <asc> <attribute>
+asc       ::= "+" | "-"
+```
+Examples ```?sort=+type```, ```?sort=+name,-type```, etc.
+
+The ```+``` says that is ascending, ```-``` descending. Each attribute is separed with ",".
+
+The ```ctx.sort``` has an array in that each element is an array where the first element
+is a boolean (true for ascending, false for descending) and the second the attribute name.
+
+***Examples***
+
+HTTP Request:
+```
+GET /animals/?page=1&sort=+name,-type
+Accept: application/json
+```
+
+```store.all``` implementing with memory
+```javascript
+var data = [ 
+    { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
+    { id: 1, name: 'Steve', sex: 'm', type: 'dog' }
+]
+
+store.all = function (ctx, filters) {
+    // here we only accept one level of sort
+    // so, '-type' is ignored.
+    if (ctx.sort.length) {
+        var attr = ctx.sort[0].attr,
+            asc  = ctx.sort[0].asc
+        data.sort(function (a, b) {
+            return asc ?
+                a[attr] < b[attr] : return a[attr] > b[attr]
+        })
+    }
+    // this is for pagination
+    return data.slice(ctx.offset, ctx.limit)
+}
+```
+
+```store.all``` implementing with [DBH-PG][]
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        var sql = 'select * from animals '
+        // here we apply multi-level sorting
+        sql += DBH.sqlOrderBy(ctx)
+        // this is for pagination
+        sql += DBH.sqlLimit(ctx)
+        conn.fetchAll(sql)
+    })
+}
+```
+
+HTTP Response:
+```
+200 Ok
+Content-Type: application/json
+Link: <{host+base_path}animals?page=1&per_page=25&sort=+name,-type>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25&sort=+name,-type>; rel="next"
+
+[
+    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
+    { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+]
+```
+
+####Counting
+Counting apply to ```store.all```.
+
+If you support pagination (highly recommended), sometimes the Api consumer
+need to know the total count of items in the store that match the filters (not only the count
+of the returned resultset).
+
+You can set ```ctx.totalCount``` var with that value. Then automatically ```Total-Count``` will be
+set in the response header.
+
+For performance reasons maybe you support this only if the Api consumer need it, in this case check
+if ```ctx.count``` is set to true (by query string ```?count=true```).
+
+***Examples***
+
+HTTP Request:
+```
+GET /animals?page=1&sort=+name,-type
+Accept: application/json
+```
+
+```store.all``` implementing with memory
+```javascript
+var data = [ 
+    { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
+    { id: 1, name: 'Steve', sex: 'm', type: 'dog' }
+]
+
+store.all = function (ctx, filters) {
+    // here we set the total count
+    if(ctx.count)
+        ctx.totalCount = data.length
+    // this is for pagination
+    return data.slice(ctx.offset, ctx.limit)
+}
+```
+
+```store.all``` implementing with [DBH-PG][]
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        return conn
+            .fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
+            .then(function (items) {
+                if (ctx.count) {
+                    this.count('animals')
+                        .then(function (total) {
+                            ctx.totalCount = total
+                            return items
+                        })
+                } else {
+                    return items
+                }
+            })
+        }
+    })
+}
+```
+
+```store.all``` implementing with [DBH-PG][] using two connections
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), db.conn(), function (conn1, conn2) {
+        // Here asynchronously we use two connections
+        // one for fetch the items and another for counting
+        var promises = {}
+        promises.items = conn1.fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
+        if (ctx.count) {
+            promises.total = conn2.count('animals')
+        }
+        return Promise.props(promises)
+            .then(function (results) {
+                if(results.total)
+                    ctx.totalCount = total
+                return results.items
+            })
+    })
+}
+```
+
+HTTP Response:
+```
+200 Ok
+Content-Type: application/json
+Total-Count: 2
+Link: <{host+base_path}animals?page=1&per_page=25&sort=+name,-type>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25&sort=+name,-type>; rel="next"
+
+[
+    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
+    { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+]
+```
 
 ####Fields Selection
+Apply to ```store.all``` and ```store.get```.
 
-####Total-Count
+```ctx.fields``` is setter to array with the value in the query string
+``?fields={comma separated list}```. If you support this then must return only the fields
+listing in ```ctx.fields```.
+
+***Examples***
+
+HTTP Request:
+```
+GET /animals/1?&fields=name,type
+Accept: application/json
+```
+
+```store.all``` implementing with memory
+```javascript
+var data = [ 
+    { id: 0, name: 'Canela', sex: 'f', type: 'cat' },
+    { id: 1, name: 'Steve', sex: 'm', type: 'dog' }
+]
+
+store.get = function (ctx, id) {
+    if(!ctx.fields.length) {
+        return data[id]
+    }
+    if(!data[id]) {
+        return null
+    }
+    // Here we select the fields
+    var selected = {}
+    ctx.fields.forEach(function (field) {
+        selected[field] = data[id][field]
+    })
+    return selected
+}
+```
+
+```store.all``` implementing with [DBH-PG][]
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), function (conn) {
+        return conn
+            .fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
+            .then(function (items) {
+                if (ctx.count) {
+                    this.count('animals')
+                        .then(function (total) {
+                            ctx.totalCount = total
+                            return items
+                        })
+                } else {
+                    return items
+                }
+            })
+        }
+    })
+}
+```
+
+```store.all``` implementing with [DBH-PG][] using two connections
+```javascript
+store.all = function (ctx, filters) {
+    return using(db.conn(), db.conn(), function (conn1, conn2) {
+        // Here asynchronously we use two connections
+        // one for fetch the items and another for counting
+        var promises = {}
+        promises.items = conn1.fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
+        if (ctx.count) {
+            promises.total = conn2.count('animals')
+        }
+        return Promise.props(promises)
+            .then(function (results) {
+                if(results.total)
+                    ctx.totalCount = total
+                return results.items
+            })
+    })
+}
+```
+
+HTTP Response:
+```
+200 Ok
+Content-Type: application/json
+Total-Count: 2
+Link: <{host+base_path}animals?page=1&per_page=25&sort=+name,-type>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25&sort=+name,-type>; rel="next"
+
+[
+    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
+    { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+]
+```
+
+####Embedding
+
+####Enveloping
 
 ## LICENSE
 
