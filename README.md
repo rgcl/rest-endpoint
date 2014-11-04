@@ -538,8 +538,8 @@ HTTP Response:
 ```
 200 Ok
 Content-Type: application/json
-Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
-  <{host+base_path}animals?page=2&per_page=25>; rel="next"
+Link: <{host+base_path}animals?page=1&per_page=25&type=cat>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25&type=cat>; rel="next"
 
 [
     { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" }
@@ -599,7 +599,10 @@ store.all = function (ctx, filters) {
 
 ```store.all``` implementing with [DBH-PG][]
 ```javascript
+store.ctx.
 store.all = function (ctx, filters) {
+    // whitelist used by DBH.sqlOrderBy
+    ctx.columns = { id: 1, name: 1, sex: 1, type: 1 }
     return using(db.conn(), function (conn) {
         var sql = 'select * from animals '
         // here we apply multi-level sorting
@@ -641,7 +644,7 @@ if ```ctx.count``` is set to true (by query string ```?count=true```).
 
 HTTP Request:
 ```
-GET /animals?page=1&sort=+name,-type
+GET /animals?page=1&count=true
 Accept: application/json
 ```
 
@@ -669,7 +672,7 @@ store.all = function (ctx, filters) {
             .fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
             .then(function (items) {
                 if (ctx.count) {
-                    this.count('animals')
+                    return this.count('animals')
                         .then(function (total) {
                             ctx.totalCount = total
                             return items
@@ -709,8 +712,8 @@ HTTP Response:
 200 Ok
 Content-Type: application/json
 Total-Count: 2
-Link: <{host+base_path}animals?page=1&per_page=25&sort=+name,-type>; rel="first",
-  <{host+base_path}animals?page=2&per_page=25&sort=+name,-type>; rel="next"
+Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25>; rel="next"
 
 [
     { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
@@ -760,56 +763,29 @@ store.get = function (ctx, id) {
 ```javascript
 store.all = function (ctx, filters) {
     return using(db.conn(), function (conn) {
-        return conn
-            .fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
-            .then(function (items) {
-                if (ctx.count) {
-                    this.count('animals')
-                        .then(function (total) {
-                            ctx.totalCount = total
-                            return items
-                        })
-                } else {
-                    return items
-                }
-            })
+        var query = 'select '
+        if (ctx.fields.length) {
+            var whitelist = { id : 1, name : 1, sex : 1, type : 1 }
+            query += DBH.sqlColumns(ctx.fields, whitelist)
+        } else {
+            query += 'id,name'
         }
-    })
-}
-```
-
-```store.all``` implementing with [DBH-PG][] using two connections
-```javascript
-store.all = function (ctx, filters) {
-    return using(db.conn(), db.conn(), function (conn1, conn2) {
-        // Here asynchronously we use two connections
-        // one for fetch the items and another for counting
-        var promises = {}
-        promises.items = conn1.fetchAll('select * from animals ' + DBH.sqlLimit(ctx))
-        if (ctx.count) {
-            promises.total = conn2.count('animals')
-        }
-        return Promise.props(promises)
-            .then(function (results) {
-                if(results.total)
-                    ctx.totalCount = total
-                return results.items
-            })
-    })
-}
+        query += ' from animals ' + DBH.sqlLimit(ctx)
+        return conn.fetchAll(query)
+    }
+})
 ```
 
 HTTP Response:
 ```
 200 Ok
 Content-Type: application/json
-Total-Count: 2
-Link: <{host+base_path}animals?page=1&per_page=25&sort=+name,-type>; rel="first",
-  <{host+base_path}animals?page=2&per_page=25&sort=+name,-type>; rel="next"
+Link: <{host+base_path}animals?page=1&per_page=25&fields=name,type>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25&fields=name,type>; rel="next"
 
 [
-    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
-    { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+    { "name" : "Canela", "type" : "cat" },
+    { "name" : "Steve", "type" : "dog" }
 ]
 ```
 
