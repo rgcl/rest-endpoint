@@ -1,9 +1,10 @@
 ***WARNING! Work in progress...***
 
-rest-endpoint
-=============
+#api-rest
 
-ExpressJS/Connect middleware to encapsulate the request to RESTful logic style.
+Express middleware to create beautiful and pragmatics REST-APIs.
+
+#Quick Example
 
 ```javascript
 
@@ -18,9 +19,6 @@ var store = {
     put : function (ctx, id, item) { },
     upd : function (ctx, id, item) { },
     del : function (ctx, id) { }
-    // These attributes can be overridden
-    // , idAttr : 'id'
-    // , ctx : {}
 };
 
 app.use('/animals/:id?', rest(store));
@@ -39,6 +37,22 @@ PUT    /animals/42               -> store.put(ctx, 42, item)
 PATCH  /animals/42               -> store.put(ctx, 42, item)
 DELETE /animals/42               -> store.del(ctx, 42)
 ```
+
+##Features
+
+* Simple and unobtrusive express middleware, so compatible with
+  [passport][], [cors][], [bluebird][], etc.
+* RESTful mapping to object called ```store```, so desacopled architecture between the
+  logic and the REST presentation.
+* Database agnostic.
+* Offers support to
+  * [pagination](#pagination),
+  * [Filtering](#filtering),
+  * (Sorting)[#sorting],
+  * (Counting)[#counting],
+  * (Fields Selection)[#fields-selection],
+  * (Embedding)[#embedding],
+  * and [Enveloping](#enveloping).
 
 ## API
 
@@ -790,11 +804,85 @@ Link: <{host+base_path}animals?page=1&per_page=25&fields=name,type>; rel="first"
 ```
 
 ####Embedding
+Apply to ```store.get``` and ```store.all```.
+
+```?embed={comma separated list}``` in the ```query string``` automatically set
+the ```ctx.embed``` var as array of string. You can use that for support hierarchical items.
+
+Example, an user has pets, but for performances reasons ```/users/193``` only return the user:
+```json
+{ "id" : 193, "name" : "Boo" }
+```
+
+If you support embedding, ```/users/193?embed=pets``` must return:
+```json
+{
+    "id" : 193,
+    "name" : "Boo",
+    "pets" : [{
+        "id" : 1234,
+        "name" : "James P. Sullivan"
+    }, {
+        "id" : 1235,
+        "name" : "Mike Wazowski"
+    }]
+}
+```
 
 ####Enveloping
+Apply to all store methods.
+
+If there are ```?envelope=true```, then the response body automatically
+wil be wrapped with the headers.
+
+To disable this set ```ctx.envelope = false```.
+
+**Examples:**
+HTTP Response ```/animals?count=true```:
+```
+200 Ok
+Content-Type: application/json
+Total-Count: 2
+Link: <{host+base_path}animals?page=1&per_page=25>; rel="first",
+  <{host+base_path}animals?page=2&per_page=25>; rel="next"
+
+[
+    { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
+    { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+]
+```
+
+**Examples:**
+HTTP Response ```/animals?count=true&envelope=true```:
+```
+200 Ok
+Content-Type: application/json
+
+{
+    "headers" : [
+        { "Content-Type" : "application/json" },
+        { "Total-Count" : 2 },
+        {
+            "Link" : {
+                "first" : "{host+base_path}animals?page=1&per_page=25",
+                "next" : "{host+base_path}animals?page=2&per_page=25"
+            }
+        }
+    ],
+    "body" : [
+        { "id" : 0, "name" : "Canela", "sex" : "f", "type" : "cat" },
+        { "id" : 1, "name" : "Steve", "sex" : "m", "type" : "dog" }
+    ]
+}
+```
+
+## Contributing
 
 ## LICENSE
 
 MIT LICENSE. See LICENSE file.
 
 [DBH-PG]: https://github.com/sapienlab/dbh-pg
+[passport]: http://passportjs.org/
+[cors]: https://github.com/troygoode/node-cors/
+[bluebird]: https://github.com/petkaantonov/bluebird
