@@ -48,10 +48,10 @@ DELETE /animals/42               -> store.del(ctx, 42)
 * Offers support to
   * [pagination](#pagination),
   * [Filtering](#filtering),
-  * (Sorting)[#sorting],
-  * (Counting)[#counting],
-  * (Fields Selection)[#fields-selection],
-  * (Embedding)[#embedding],
+  * [Sorting](#sorting),
+  * [Counting](#counting),
+  * [Fields Selection](#fields-selection),
+  * [Embedding](#embedding),
   * and [Enveloping](#enveloping).
 
 ## API
