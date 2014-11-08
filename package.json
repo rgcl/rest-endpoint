@@ -1,5 +1,10 @@
 {
   "name": "rest-endpoint",
   "version": "0.0.0",
-  "main": "main.js"
+  "main": "index.js",
+  "devDependencies": {
+    "express": "~4.10.1",
+    "mocha": "~2.0.1",
+    "body-parser": "~1.9.2"
+  }
 }
